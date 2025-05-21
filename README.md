@@ -20,7 +20,7 @@ sequenceDiagram
     box AWS
         participant API as Data Collector Database(Lambda Function)
         participant DB as Database
-        participant Dashboard as Admin Dashboard(Lambda Function)
+        participant Dashboard as Admin Dashboard(Amplify)
     end
 
     box Admin Environment
