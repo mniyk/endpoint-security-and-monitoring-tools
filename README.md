@@ -6,8 +6,10 @@ This project is a security tool designed for endpoint monitoring.
 It provides various security monitoring capabilities to observe and track activities on endpoint devices.
 
 ## Features
-**Planned to add in the future**
 - **USB File Transfer Monitoring**: Tracking of file transfers to USB devices
+
+**Planned to add in the future**
+- **Printer Monitoring**: Tracking of transfers to Printer
 
 ## System Architecture
 ```mermaid
