@@ -1,0 +1,8 @@
+{
+  "modules": {
+    "usb_file_transfer_monitoring": {
+      "enabled": true,
+      "options": {}
+    }
+  }
+}
