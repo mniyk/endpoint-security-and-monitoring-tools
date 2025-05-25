@@ -7,9 +7,9 @@ It provides various security monitoring capabilities to observe and track activi
 
 ## Features
 - **USB File Transfer Monitoring**: Tracking of file transfers to USB devices
+- **Printer Transfer Monitoring**: Tracking of transfers to Printer
 
 **Planned to add in the future**
-- **Printer Transfer Monitoring**: Tracking of transfers to Printer
 
 ## System Architecture
 ```mermaid
