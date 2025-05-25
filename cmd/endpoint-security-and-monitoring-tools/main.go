@@ -11,6 +11,7 @@ import (
 	"github.com/mniyk/endpoint-security-and-monitoring-tools/internal/transmission"
 	"github.com/mniyk/endpoint-security-and-monitoring-tools/internal/userinfo"
 	"github.com/mniyk/endpoint-security-and-monitoring-tools/module"
+	"github.com/mniyk/endpoint-security-and-monitoring-tools/module/printer"
 	"github.com/mniyk/endpoint-security-and-monitoring-tools/module/usb"
 )
 
@@ -98,6 +99,9 @@ func registerModules(manager *module.Manager, cfg *config.Configs, userInfo *use
 		case "usb_file_transfer_monitoring":
 			config := usb.NewMonitorConfig(cfg.Modules[name])
 			moduleInstance = usb.NewMonitor(config, userInfo, eventDispatcher)
+		case "printer_transfer_monitoring":
+			config := printer.NewMonitorConfig(cfg.Modules[name])
+			moduleInstance = printer.NewMonitor(config, userInfo, eventDispatcher)
 		}
 
 		if moduleInstance != nil {
