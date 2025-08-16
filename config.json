@@ -5,6 +5,10 @@
       "options": {}
     },
     "printer_transfer_monitoring": {
+      "enabled": false,
+      "options": {}
+    },
+    "bluetooth_file_transfer_monitoring": {
       "enabled": true,
       "options": {}
     }
