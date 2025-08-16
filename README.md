@@ -8,6 +8,7 @@ It provides various security monitoring capabilities to observe and track activi
 ## Features
 - **USB File Transfer Monitoring**: Tracking of file transfers to USB devices
 - **Printer Transfer Monitoring**: Tracking of transfers to Printer
+- **Bluetooth File Transfer Monitoring**: Tracking of file transfers to Bluetooth
 
 **Planned to add in the future**
 
