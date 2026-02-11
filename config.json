@@ -1,4 +1,16 @@
 {
+  "transmission": {
+    "lambda": {
+      "enabled": true,
+      "url": "",
+      "api_key": "",
+      "timeout_seconds": 30,
+      "retry_count": 3,
+      "retry_delay_seconds": 2
+    },
+    "batch_size": 5,
+    "flush_interval_seconds": 5
+  },
   "modules": {
     "usb_file_transfer_monitoring": {
       "enabled": false,
@@ -9,7 +21,7 @@
       "options": {}
     },
     "bluetooth_file_transfer_monitoring": {
-      "enabled": true,
+      "enabled": false,
       "options": {}
     }
   }
