@@ -1,0 +1,196 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Endpoint Security Monitoring - Lambda and DynamoDB'
+
+Resources:
+  # API Key Secret
+  ApiKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: endpoint-security-api-key
+      Description: API Key for endpoint security monitoring
+      GenerateSecretString:
+        SecretStringTemplate: '{}'
+        GenerateStringKey: api_key
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+  # DynamoDB Table
+  SecurityEventsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: security-events
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: event_id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: event_id
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+
+  # Lambda Execution Role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:BatchWriteItem
+                Resource: !GetAtt SecurityEventsTable.Arn
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref ApiKeySecret
+
+  # Lambda Function
+  SecurityEventsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: security-events-handler
+      Runtime: python3.12
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref SecurityEventsTable
+          SECRET_ARN: !Ref ApiKeySecret
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          
+          dynamodb = boto3.resource('dynamodb')
+          table = dynamodb.Table(os.environ['TABLE_NAME'])
+          secrets_client = boto3.client('secretsmanager')
+          
+          # Cache API key
+          api_key_cache = None
+          
+          def get_api_key():
+              global api_key_cache
+              if api_key_cache is None:
+                  secret_arn = os.environ.get('SECRET_ARN')
+                  if secret_arn:
+                      response = secrets_client.get_secret_value(SecretId=secret_arn)
+                      secret = json.loads(response['SecretString'])
+                      api_key_cache = secret.get('api_key', '')
+              return api_key_cache
+          
+          def lambda_handler(event, context):
+              try:
+                  # API Key validation
+                  api_key = get_api_key()
+                  if api_key:
+                      headers = event.get('headers', {})
+                      request_api_key = headers.get('x-api-key', '')
+                      
+                      if request_api_key != api_key:
+                          return {
+                              'statusCode': 403,
+                              'body': json.dumps({'error': 'Invalid API Key'})
+                          }
+                  
+                  body = json.loads(event.get('body', '{}'))
+                  events = body.get('events', [])
+                  
+                  if not events:
+                      return {
+                          'statusCode': 400,
+                          'body': json.dumps({'error': 'No events provided'})
+                      }
+                  
+                  with table.batch_writer() as batch:
+                      for evt in events:
+                          item = {
+                              'event_id': evt.get('id', ''),
+                              'timestamp': evt.get('timestamp', ''),
+                              'user_id': evt.get('data', {}).get('user', ''),
+                              'event_type': evt.get('type', ''),
+                              'module_name': 'usb',
+                              'severity': str(evt.get('severity', 0)),
+                              'data': json.dumps(evt, default=str)
+                          }
+                          batch.put_item(Item=item)
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'message': 'Events saved successfully',
+                          'count': len(events)
+                      })
+                  }
+              
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': str(e)})
+                  }
+
+  # Lambda Function URL
+  SecurityEventsFunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !GetAtt SecurityEventsFunction.Arn
+      AuthType: NONE
+      Cors:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - POST
+        AllowHeaders:
+          - '*'
+      InvokeMode: BUFFERED
+
+  # Lambda Permission for Function URL (InvokeFunctionUrl)
+  SecurityEventsFunctionUrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SecurityEventsFunction
+      Action: lambda:InvokeFunctionUrl
+      Principal: '*'
+      FunctionUrlAuthType: 'NONE'
+
+  # Lambda Permission for Function URL (InvokeFunction)
+  SecurityEventsFunctionInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SecurityEventsFunction
+      Action: lambda:InvokeFunction
+      Principal: '*'
+
+Outputs:
+  LambdaFunctionUrl:
+    Description: Lambda Function URL
+    Value: !GetAtt SecurityEventsFunctionUrl.FunctionUrl
+
+  DynamoDBTableName:
+    Description: DynamoDB Table Name
+    Value: !Ref SecurityEventsTable
+
+  ApiKeySecretArn:
+    Description: API Key Secret ARN
+    Value: !Ref ApiKeySecret

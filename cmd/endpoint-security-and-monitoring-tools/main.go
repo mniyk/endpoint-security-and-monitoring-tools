@@ -36,7 +36,24 @@ func main() {
 	userInfo := userinfo.NewUserInfo()
 
 	// イベント送信機能を初期化
-	eventDispatcher := transmission.NewEventSender(5)
+	var eventDispatcher transmission.EventDispatcher
+	if cfg.Transmission.Lambda.Enabled {
+		log.Println("[Main] Lambda transmission enabled")
+
+		lambdaConfig := &transmission.LambdaConfig{
+			URL:        cfg.Transmission.Lambda.URL,
+			Enabled:    cfg.Transmission.Lambda.Enabled,
+			Timeout:    cfg.Transmission.Lambda.GetTimeout(),
+			RetryCount: cfg.Transmission.Lambda.RetryCount,
+			RetryDelay: cfg.Transmission.Lambda.GetRetryDelay(),
+			APIKey:     cfg.Transmission.Lambda.APIKey,
+		}
+		eventDispatcher = transmission.NewEventSenderWithLambda(cfg.Transmission.BatchSize, lambdaConfig)
+	} else {
+		log.Println("[Main] Lambda transmission disabled (local logging only)")
+
+		eventDispatcher = transmission.NewEventSender(cfg.Transmission.BatchSize)
+	}
 
 	// モジュールの管理
 	manager := module.NewManager(cfg)
@@ -58,19 +75,23 @@ func main() {
 		}
 	}
 
+	// 定期的なフラッシュを実行
+	flushInterval := cfg.Transmission.GetFlushInterval()
 	go func() {
-		ticker := time.NewTicker(5 * time.Second)
+		ticker := time.NewTicker(flushInterval)
 		defer ticker.Stop()
 
 		for range ticker.C {
 			if eventDispatcher.IsOverBatchSize() || eventDispatcher.IsOverTime() {
 				// 保留中のイベントを送信
-				eventDispatcher.Flush()
+				if err := eventDispatcher.Flush(); err != nil {
+					log.Printf("[Main] Failed to flush events: %v", err)
+				}
 			}
 		}
 	}()
 
-	// シグナルを待機（無限ループを削除）
+	// シグナルを待機
 	sig := <-sigChan
 	log.Printf("[Main] Received termination signal: %v", sig)
 
@@ -81,12 +102,14 @@ func main() {
 	stopErrors := manager.StopAllModules()
 	if len(stopErrors) > 0 {
 		for name, err := range stopErrors {
-			log.Fatalf("[Main] Failed stop module (%s): %v", name, err)
+			log.Printf("[Main] Failed stop module (%s): %v", name, err)
 		}
 	}
 
 	// 強制的にイベントキューをフラッシュ
-	eventDispatcher.Flush()
+	if err := eventDispatcher.Flush(); err != nil {
+		log.Printf("[Main] Failed to flush events during cleanup: %v", err)
+	}
 
 	log.Println("[Main] Stop security monitoring...")
 }
